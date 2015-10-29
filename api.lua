@@ -1,136 +1,220 @@
+local stats = {}
+local effects = {}
 
-local player_status = {}
-player_status["players"] = {}
+local players = {}
+local eiidCounter = 0
 
---APPLY PHYSICS START
-function playerstatus.set_physics(playerName)
-	local player = minetest.get_player_by_name(playerName)
-	if not player then return end
-	local physic = {
-		speed = player_status["players"][playerName]["physics"]["speed"],
-		jump = player_status["players"][playerName]["physics"]["jump"],
-		gravity = player_status["players"][playerName]["physics"]["gravity"],
+local function nvl(v, d) if v == nil then return d end return v end
+-- No, I swear I didn't do any Oracle SQL ;)
+local function pnm(p) if type(p) == "string" then return p elseif type(p) == "userdata" return p:get_player_name() end return nil end
+
+--
+-- STATS
+--
+
+function playerstatus.register_stat(name, spec)
+	if type(name) ~= "string" or type(spec) ~= "table" or stats[name] ~= nil then
+		return
+	end
+	stats[name] = {
+		basemax   = spec.basemax,
+		baseregen = spec.baseregen or 0,
+		integer   = nvl(spec.integer, true),
+		maxchangescale = nvl(spec.maxchangescale, true),
+		valchangecbs = {}
 	}
-	player:set_physics_override(physic)
+	if spec.hudbar then
+		stats[name].hudbar = {
+			text_color = spec.hudbar.text_color,
+			label = spec.hudbar.label,
+			textures = spec.hudbar.textures,
+			default_start_hidden = nvl(spec.hudbar.default_start_hidden, false),
+			format_string = spec.hudbar.format_string
+		}
+		stats[name].hudbar.visible = default_start_hidden
+	end
 end
 
-function playerstatus.update_physics(playerName)
-	local player = minetest.get_player_by_name(playerName)
-	if not player then return end
-	
-	local bonus = playerstatus.get_bonus(playerName)
-	local speed = SPEED + bonus["speed"]
-	local jump = JUMP + bonus["agility"]
-	local gravity = GRAVITY + bonus["gravity"]
-	local sprint_speed = SPRINT_SPEED + bonus["speed"]
-	local sprint_jump = SPRINT_JUMP + bonus["agility"]
-	local stamina_max = playerstatus.get_stamina_max(playerName) + bonus["stamina_max"]
-	playerstatus.set_stamina_max(playerName, stamina_max)
-	player_status["players"][playerName]["physics"]["speed"] = speed
-	player_status["players"][playerName]["physics"]["jump"] = jump
-	player_status["players"][playerName]["physics"]["gravity"] = gravity
-	player_status["players"][playerName]["physics"]["sprint_speed"] = sprint_speed
-	player_status["players"][playerName]["physics"]["sprint_jump"] = sprint_jump
-	playerstatus.set_physics(playerName)
-	--print(dump(player_status["players"][playerName]))
+local function stat_invalid(name)
+	return type(name) ~= "string" or stats[name] == nil
+end
+
+local function plr_stat_invalid(player, name)
+	return player == nil or players[player] == nil or players[player].stats == nil or
+	       stat_invalid(name) or players[player].stats[name] == nil
 end
 
 
-function playerstatus.get_bonus(playerName)
-	local bonus = {
-		["speed"] = 0,
-		["agility"] = 0,
-		["gravity"] = 0,
-		["stamina_max"] = 0,
+function playerstatus.get_stat_basemax(name)
+	if stat_invalid(name) then
+		return nil
+	end
+	return stats[name].basemax
+end
+
+function playerstatus.get_stat_baseregen(name)
+	if stat_invalid(name) then
+		return nil
+	end
+	return stats[name].baseregen
+end
+
+
+function playerstatus.get_stat_effectivemax(player, name)
+	player = pnm(player)
+	if plr_stat_invalid(player, name) then
+		return nil
+	end
+	return players[player].stats[name].max
+end
+
+function playerstatus.get_stat_effectiveregen(player, name)
+	player = pnm(player)
+	if plr_stat_invalid(player, name) then
+		return nil
+	end
+	return players[player].stats[name].regen
+end
+
+function playerstatus.get_stat_value(player, name)
+	player = pnm(player)
+	if plr_stat_invalid(player, name) then
+		return nil
+	end
+	if stats[name].integer then
+		return floor(players[player].stats[name].value)
+	end
+	return players[player].stats[name].value
+end
+
+function playerstatus.set_stat_value(player, name, value)
+	player = pnm(player)
+	if plr_stat_invalid(player, name) then
+		return
+	end
+	players[player].stats[name].value = value
+end
+
+function playerstatus.add_stat_value(player, name, add)
+	player = pnm(player)
+	if plr_stat_invalid(player, name) then
+		return
+	end
+	players[player].stats[name].value = players[player].stats[name].value + add
+end
+
+
+function playerstatus.add_onstatvalchange_callback(name, callback)
+	if stat_invalid(name) or type(callback) ~= "function" then
+		return nil
+	end
+	table.insert(stats[name].valchangecbs, callback)
+	return true
+end
+
+-- function playerstatus.set_stat_hudbar_visibility(name, visible)
+-- Or something like that.
+
+--
+-- EFFECTS
+--
+
+function playerstatus.register_effect(name, spec)
+	if type(name) ~= "string" or type(spec) ~= "table" or effects[name] ~= nil then
+		return nil
+	end
+	effects[name] = {
+		maxapplies = nvl(spec.maxapplies, 0),
+		statchanges = {}
 	}
-	for def, n in pairs(player_status["players"][playerName]["bonus"]) do
-		for _,i in pairs(n) do
-			bonus[def] = bonus[def] + i
+	for k, v in pairs(spec.statchanges) do
+		effects[name].statchanges[k] = {
+			baseadd = nvl(spec.statchanges.baseadd, 0),
+			pct = nvl(spec.statchanges.pct, 0),
+			add = nvl(spec.statchanges.add, 0),
+			regenbaseadd = nvl(spec.statchanges.regenbaseadd, 0),
+			regenpct = nvl(spec.statchanges.regenpct, 0),
+			regenadd = nvl(spec.statchanges.regenadd, 0),
+			disableregen = nvl(spec.statchanges.disableregen, false)
+		}
+	end
+	return true
+end
+
+local function effect_invalid(name)
+	return type(name) ~= "string" or effects[name] == nil
+end
+
+function playerstatus.apply_effect(player, effectname)
+	player = pnm(player)
+	if player == nil or effect_invalid(effectname) then
+		return nil
+	end
+	local applied = 0
+	for k, v in ipairs(players[player].effects) do
+		if v == effectname then
+			applied = applied + 1
 		end
 	end
-	return bonus
+	if applied >= effects[effectname].maxapplies then
+		return false
+	end
+	players[player].effects[eiidCounter] = effectname
+	eiidCounter = eiidCounter + 1
+	return eiidCounter - 1
 end
 
-
-function playerstatus.set_bonus(playerName, modname, bonus)
-	player_status["players"][playerName]["bonus"]["speed"][modname] = bonus["speed"] or nil
-	player_status["players"][playerName]["bonus"]["agility"][modname] = bonus["agility"] or nil
-	player_status["players"][playerName]["bonus"]["gravity"][modname] = bonus["gravity"] or nil
-	player_status["players"][playerName]["bonus"]["stamina_max"][modname] = bonus["stamina_max"] or nil
-	playerstatus.update_physics(playerName)
+function playerstatus.remove_effect(eeid)
+	if type(eeid) ~= "number" then
+		return nil
+	end
+	for player, ptable in pairs(players) do
+		for peeid, peffectname in pairs(ptable.effects) do
+			if peeid == eeid then
+				ptable.effects[eeid] = nil
+				return true
+			end
+		end
+	end
+	return nil
 end
---APPLY PHYSICS END
 
+function playerstatus.remove_effect_all(effectname)
+	if effect_invalid(effectname) then
+		return nil
+	end
+	local rmCount = 0
+	for player, ptable in pairs(players) do
+		for peeid, peffectname in pairs(ptable.effects) do
+			if peffectname == effectname then
+				ptable.effects[peeid] = nil
+				rmCount = rmCount + 1
+			end
+		end
+	end
+	return rmCount
+end
 
---SPRINT START
-function playerstatus.set_sprinting(playerName, is_sprint)
+--
+-- INTERNALS
+--
+
+local function update_core_values(playerName)
 	local player = minetest.get_player_by_name(playerName)
 	if not player then return end
-	if is_sprint and playerstatus.get_stamina(playerName) > 0 then
-		player:set_physics_override({
-			speed = player_status["players"][playerName]["physics"]["sprint_speed"],
-			jump = player_status["players"][playerName]["physics"]["sprint_jump"],
-		})
-	else
-		player:set_physics_override({
-			speed = player_status["players"][playerName]["physics"]["speed"],
-			jump = player_status["players"][playerName]["physics"]["jump"],
-		})
-	end
-
+	player:set_physics_override({
+		speed = players[playerName].stats.speed.value,
+		jump = players[playerName].stats.jump.value,
+		gravity = players[playerName].stats.gravity.value,
+	})
 end
-
-
-function playerstatus.get_stamina(playerName)
-	return player_status["players"][playerName]["physics"]["stamina"] or 0
-end
-
-
-function playerstatus.set_stamina(playerName, stamina)
-	local max = playerstatus.get_stamina_max(playerName)
-	if stamina < 0 then
-		stamina = 0
-	elseif stamina > max then
-		stamina = max
-	end
-	player_status["players"][playerName]["physics"]["stamina"] = stamina
-end
-
-
-function playerstatus.get_stamina_max(playerName)
-	return player_status["players"][playerName]["physics"]["stamina_max"] or STAMINA_MAX
-end
-
-
-function playerstatus.set_stamina_max(playerName, stamina_max)
-	if stamina_max >= 0 then
-		player_status["players"][playerName]["physics"]["stamina_max"] = stamina_max
-	end
-end
---SPRINT END
-
 
 
 minetest.register_on_joinplayer(function(player)
 	local playerName = player:get_player_name()
-	player_status["players"][playerName] = {}
-	player_status["players"][playerName]["physics"] = {
-		["speed"] = SPEED,
-		["jump"] = JUMP,
-		["gravity"] = GRAVITY,
-		["sprint_speed"] = SPRINT_SPEED,
-		["sprint_jump"] = SPRINT_JUMP,
-		["walking"] = true,
-		["stamina"] = 0,
-		["stamina_max"] = STAMINA_MAX,
-		--["sneak"] = false,
-		--["sneak_glitch"] = false,
-	}
-	player_status["players"][playerName]["bonus"] = {
-		["speed"] = {},
-		["agility"] = {},
-		["gravity"] = {},
-		["stamina_max"] = {},
+	players[playerName] = {
+		stats = {},
+		effects = {}
 	}
 	playerstatus.update_physics(playerName)
 end)
@@ -138,6 +222,6 @@ end)
 
 minetest.register_on_leaveplayer(function(player)
 	local playerName = player:get_player_name()
-	player_status["players"][playerName] = nil
+	players[playerName] = nil
 end)
 

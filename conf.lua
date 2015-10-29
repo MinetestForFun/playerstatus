@@ -1,6 +1,3 @@
-SPEED = 1.0
-JUMP = 1
-GRAVITY = 1.0
-SPRINT_SPEED = 1.35
-SPRINT_JUMP = 1.1
-STAMINA_MAX = 10
+playerstatus.SPEED = 1.0
+playerstatus.JUMP = 1
+playerstatus.GRAVITY = 1.0
