@@ -74,7 +74,7 @@ If `hudbars` is available:
 * `playerstatus.set_stat_hudbar_visibility(name, visible)`
 
 ## Effects
-EEID stands for Effect Instance ID.
+EIID stands for Effect Instance ID.
 
 * `playerstatus.register_effect(name, spec)`
   * **Parameters**:
@@ -119,15 +119,15 @@ EEID stands for Effect Instance ID.
      * `player`: nickname or ObjectRef of targeted player
      * `effectname`: name of the effect to apply
   * **Returns**:
-     * An EEID if all succeeds
+     * An EIID if all succeeds
      * `false` if the effect is already applied `maxapplies` times
      * `nil` if the player or effect isn't found (bad parameters)
-* `playerstatus.remove_effect(eeid) -> true/nil`
+* `playerstatus.remove_effect(eiid) -> true/nil`
   * **Parameters**:
-     * `eeid`: EEID of effect to remove
+     * `eiid`: EIID of effect to remove
   * **Returns**:
      * `true` if all succeeds
-     * `nil` if the supplied EEID is invalid
+     * `nil` if the supplied EIID is invalid
 * `playerstatus.remove_effect_all(effectname) -> number/nil`
   * **Parameters**:
      * `effectname`: name of effect to remove to all players

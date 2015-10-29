@@ -164,14 +164,14 @@ function playerstatus.apply_effect(player, effectname)
 	return eiidCounter - 1
 end
 
-function playerstatus.remove_effect(eeid)
-	if type(eeid) ~= "number" then
+function playerstatus.remove_effect(eiid)
+	if type(eiid) ~= "number" then
 		return nil
 	end
 	for player, ptable in pairs(players) do
-		for peeid, peffectname in pairs(ptable.effects) do
-			if peeid == eeid then
-				ptable.effects[eeid] = nil
+		for peiid, peffectname in pairs(ptable.effects) do
+			if peiid == eiid then
+				ptable.effects[eiid] = nil
 				return true
 			end
 		end
@@ -185,9 +185,9 @@ function playerstatus.remove_effect_all(effectname)
 	end
 	local rmCount = 0
 	for player, ptable in pairs(players) do
-		for peeid, peffectname in pairs(ptable.effects) do
+		for peiid, peffectname in pairs(ptable.effects) do
 			if peffectname == effectname then
-				ptable.effects[peeid] = nil
+				ptable.effects[peiid] = nil
 				rmCount = rmCount + 1
 			end
 		end
